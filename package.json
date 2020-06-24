@@ -1,0 +1,24 @@
+{
+  "name": "strux",
+  "version": "1.0.0",
+  "description": "",
+  "main": "index.js",
+  "scripts": {
+    "test": "ts-mocha --paths -p test/**/*.spec.ts",
+    "build": "tsc",
+    "watch": "tsc --watch"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "devDependencies": {
+    "@types/expect": "^24.3.0",
+    "@types/mocha": "^7.0.2",
+    "expect": "^26.0.1",
+    "ts-mocha": "^7.0.0",
+    "typescript": "^3.9.5"
+  },
+  "dependencies": {
+    "rxjs": "^6.5.5"
+  }
+}
