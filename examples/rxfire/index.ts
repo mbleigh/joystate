@@ -1,4 +1,10 @@
-import { createStore, set, subscribe, observer } from "../../src/index";
+import {
+  createStore,
+  set,
+  subscribe,
+  observer,
+  untilLoaded,
+} from "../../src/index";
 
 interface Todo {
   id: string;
@@ -10,6 +16,7 @@ interface Todo {
 interface TodoState {
   seconds: number;
   secondsLabel: string;
+  counterDone: boolean;
   todos: Todo[];
   user: { uid: string; name: string; email: string };
 }
@@ -34,12 +41,27 @@ set(
   })
 );
 
-const obs = observer(store, "seconds", { transform: (v) => v / 1000 });
-let j = 0;
-setInterval(() => {
-  j++;
-  if (j > 10) {
-    obs.complete();
-  }
-  obs.next(1000 * j);
-}, 1000);
+set(
+  store,
+  "counterDone",
+  new Promise((resolve, reject) => {
+    const obs = observer(store, "seconds", { transform: (v) => v / 1000 });
+    let j = 0;
+    const interval = setInterval(() => {
+      j++;
+      if (j === 5) {
+        reject(new Error("something went wrong"));
+      }
+      if (j > 10) {
+        clearInterval(interval);
+        obs.complete();
+        // resolve(true);
+      }
+      obs.next(1000 * j);
+    }, 1000);
+  })
+);
+
+untilLoaded(store, "user", "counterDone").then((state) => {
+  console.log("Counter is done at", state.seconds, "and user is", state.user);
+});

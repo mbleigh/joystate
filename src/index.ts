@@ -98,7 +98,8 @@ export async function set<K extends keyof T, T = any>(
   scheduleNotify(store);
 
   try {
-    store.state = { ...store.state, [key]: await Promise.resolve(value) };
+    const eventualVal = await Promise.resolve(value);
+    store.state = { ...store.state, [key]: eventualVal };
   } catch (e) {
     store.state = { ...store.state, [key]: undefined };
     store.errors[key] = e;
@@ -265,6 +266,31 @@ export function loaded<T = any>(
     }
   }
   return true;
+}
+
+export function untilLoaded<T = any>(
+  store: Store<T>,
+  ...keys: (keyof T)[]
+): Promise<Partial<T>> {
+  return new Promise((resolve, reject) => {
+    const unsub = subscribe(store, (state, context) => {
+      for (const key of keys) {
+        if (context.errors[key]) {
+          unsub();
+          reject(context.errors[key]);
+          return;
+        }
+
+        // one or more keys still loading, keep waiting
+        if (context.loading[key]) {
+          return;
+        }
+      }
+
+      unsub();
+      resolve(state);
+    });
+  });
 }
 
 /**

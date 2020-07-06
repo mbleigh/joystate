@@ -21,6 +21,7 @@
     "@types/mocha": "^7.0.2",
     "expect": "^26.0.1",
     "mocha": "^8.0.1",
+    "prettier": "^2.0.5",
     "ts-mocha": "^7.0.0",
     "typescript": "^3.9.5"
   },
