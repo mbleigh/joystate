@@ -1,24 +1,8 @@
-import { Observer, SubscribableOrPromise, Observable } from "rxjs";
-
-export interface Status<T> {
-  known: boolean;
-  loading: boolean;
-  live: boolean;
-  error?: Error;
-  value: T | null;
-}
-
-const DEFAULT_STATUS = { known: false, loading: false, live: false };
-
-export interface getter<T, U> {
-  (state: Partial<T>): U;
-}
-
-export class Store<T> {
+export class OldStore<T> {
   private currentState: Partial<T>;
   private statusMap: { [k in keyof T]?: Status<any> } = {};
   private unsubs: { [k in keyof T]?: () => void } = {};
-  private getters: { [k in keyof T]?: getter<T, any> } = {};
+  private getters: { [k in keyof T]?: Getter<T, any> } = {};
   private notifs: { [k in keyof T]?: Set<keyof T> } = {};
   private subs: { [k in keyof T]?: Set<(val: T[k] | null) => any> } = {};
   private statusSubs: {
@@ -47,6 +31,25 @@ export class Store<T> {
     return this.currentState[key]! || null;
   }
 
+  getAll<K extends keyof T>(keys: K[]): Partial<T> {
+    const out: Partial<T> = {};
+    for (const k of keys) {
+      out[k] = this.get(k) as T[K] | undefined;
+    }
+    return out;
+  }
+
+  // getAllStatus<K extends keyof T, K2 extends keyof U>(
+  //   keys: K[]
+  // ): Status<Partial<T>> {
+  //   const out: Status<Partial<T>> = { ...DEFAULT_STATUS, value: {} };
+  //   for (const k of keys) {
+  //     const st = this.getStatus(k);
+  //     out.value![k] = st.value as T[K] | undefined;
+  //   }
+  //   return out;
+  // }
+
   async set<K extends keyof T>(
     key: K,
     val: T[K] | SubscribableOrPromise<T[K]>
@@ -56,17 +59,24 @@ export class Store<T> {
     }
     // handle setting over existing observables, promises in flight, etc
 
-    if ("then" in val && typeof val.then === "function") {
+    if (
+      val &&
+      typeof val === "object" &&
+      "then" in val &&
+      typeof val.then === "function"
+    ) {
       this.statusMap[key] = {
         known: true,
         loading: true,
         live: false,
         value: null,
       };
-      // notifystatus
+      this.notifyStatus(key);
       try {
         this.currentState = { ...this.currentState, [key]: await val };
-        // notifyvalue
+        this.statusMap[key] = { ...this.statusMap[key], loading: false };
+        this.notifyStatus(key);
+        this.notifyValue(key);
       } catch (e) {
         this.statusMap[key] = {
           known: true,
@@ -75,10 +85,15 @@ export class Store<T> {
           error: e,
           value: null,
         };
-        // notifystatus
+        this.notifyStatus(key);
       }
       return;
-    } else if ("subscribe" in val && typeof val.subscribe === "function") {
+    } else if (
+      val &&
+      typeof val === "object" &&
+      "subscribe" in val &&
+      typeof val.subscribe === "function"
+    ) {
       if (this.unsubs[key]) this.unsubs[key]!();
       this.unsubs[key] = val.subscribe(this.observer(key)).unsubscribe;
     }
@@ -89,12 +104,12 @@ export class Store<T> {
       live: false,
       value: val,
     };
-    this.currentState = { ...this.currentState, [key]: await val };
+    this.currentState = { ...this.currentState, [key]: val };
   }
 
   getter<K extends keyof T>(
     key: K,
-    getter: getter<T, T[K]>,
+    getter: Getter<T, T[K]>,
     depends: K[] = []
   ): void {
     this.statusMap[key] = {
@@ -147,13 +162,16 @@ export class Store<T> {
     };
   }
 
+  async *generator<K extends keyof T>(key: K): AsyncIterable<Status<T[K]>> {
+    yield { ...DEFAULT_STATUS, value: this.get(key) };
+  }
+
   notifyList(key: keyof T): Set<keyof T> {
     const toCheck = this.notifs[key] ? this.notifs[key]! : [];
     return new Set([key, ...toCheck]);
   }
 
   notifyStatus<K extends keyof T>(key: K): void {
-    console.log(this.notifyList(key));
     this.notifyList(key).forEach((k) => {
       if (this.statusSubs[k]) {
         this.statusSubs[k]!.forEach((sub) => sub(this.getStatus(k)));
@@ -208,65 +226,3 @@ export class Store<T> {
     });
   }
 }
-
-/*
-  get<K extends keyof T>(key: K): T[K] | null {
-    if (typeof this.state[key] === "undefined") return null;
-    return this.state[key]!;
-  }
-
-  async set<K extends keyof T>(key: K, val: T[K] | Promise<T[K]>): Promise<T> {
-    if ("then" in val && typeof val.then === "function") {
-      this.statusMap[key] = { known: true, loading: true, live: false };
-      this.notifyStatus(key);
-      try {
-        this.currentState = { ...this.state, [key]: await val };
-        this.statusMap[key] = { known: true, loading: false, live: false };
-        this.notify(key);
-      } catch (e) {
-        this.statusMap[key] = {
-          known: true,
-          loading: false,
-          live: false,
-          error: e,
-        };
-      }
-    }
-    return this.state;
-  }
-
-  private notify<K extends keyof T>(key: K): void {
-    this.notifyStatus(key);
-    this.notifyValue(key);
-  }
-
-  private notifyStatus<K extends keyof T>(key: K): void {
-    (this.statusListens[key]! || []).forEach((l) => {
-      l(this.status(key));
-    });
-  }
-
-  private notifyValue<K extends keyof T>(key: K): void {
-    (this.valueListens[key]! || []).forEach((l) => {
-      l(this.get(key), this.status(key));
-    });
-  }
-
-  status(key: keyof T): Status {
-    return this.statusMap[key] ? this.statusMap[key]! : { ...DEFAULT_STATUS };
-  }
-
-  get state(): Readonly<T> {
-    return { ...(this.currentState as Readonly<T>) };
-  }
-
-  subscribe<K extends keyof T>(keys: K | K[], fn: (val: Partial<T>, )): Pick<T, K> {
-    if (typeof keys === 'string') {
-      keys = [keys];
-    }
-
-    this.valueListens[key] = this.valueListens[key] || [];
-    this.valueListens[key].push();
-  }
-}
-*/

@@ -1,0 +1,17 @@
+{
+  "name": "strux-example-rxfire",
+  "version": "1.0.0",
+  "description": "",
+  "main": "index.js",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "dependencies": {
+    "firebase": "^7.15.4",
+    "rxfire": "^3.13.4",
+    "rxjs": "^6.5.5"
+  }
+}
